@@ -129,7 +129,7 @@
         <input type="checkbox" id="chk-labels" checked>
         Show city/village name labels
       </label>
-      <div class="status" style="margin-left:0;" id="labels-note">In grayscale mode this is a real label-only map layer. In color/satellite mode (no matching layer available) it falls back to just city/village name labels.</div>
+      <div class="status" style="margin-left:0;" id="labels-note">Shows city/village name labels, drawn from our own boundary data — works the same in every base-map mode.</div>
     </fieldset>
 
     <fieldset id="darkness-fieldset">
@@ -383,27 +383,27 @@ function stadiaUrl(style){
 // Base layers — one active at a time, all from Stadia Maps (OSM-sourced,
 // embeddable with a free API key, unlike the raw OSM tile servers which
 // block embedded/repeated use, or CARTO/Esri which now require paid keys).
-// Stadia's "stamen_toner_background" is genuinely label-free (unlike plain
-// OSM tiles), with "stamen_toner_labels" as a real separate overlay — so the
-// labels toggle actually controls something in grayscale mode now, not just
-// a workaround.
+// Grayscale uses "stamen_toner_lite" — softer grayscale (grays instead of
+// solid black for water/vegetation) than the bolder stamen_toner_background.
+// Trade-off: it's a single composited style with labels baked in, so it
+// falls back to our own city/village-name overlay for labels, same as
+// color/satellite, rather than a true separate labels toggle.
 const baseLayers = {
   color: L.tileLayer(stadiaUrl('alidade_smooth'), { attribution: ATTR_STADIA, maxZoom: 20 }),
-  gray:  L.tileLayer(stadiaUrl('stamen_toner_background'), { attribution: ATTR_STADIA, maxZoom: 20 }),
+  gray:  L.tileLayer(stadiaUrl('stamen_toner_lite'), { attribution: ATTR_STADIA, maxZoom: 20 }),
   sat:   L.tileLayer(stadiaUrl('alidade_satellite'), { attribution: ATTR_STADIA, maxZoom: 20 })
 };
 // Real labels-only overlay for grayscale mode (transparent, text/roads-labels
 // only). Color and satellite don't have a matching split style from Stadia,
 // so they keep falling back to our own city/village-name overlay for labels.
-const grayLabelsOverlay = L.tileLayer(stadiaUrl('stamen_toner_labels'), { attribution: ATTR_STADIA, maxZoom: 20, pane: 'overlayPane' });
 
 let currentBase = 'gray';
 let placeLabelsLayer = null;
 
-// "Show place/street labels" — in grayscale mode this now toggles Stadia's
-// real labels-only tile overlay. In color/satellite mode (no matching split
-// style available) it falls back to our own city/village-name overlay,
-// built from data we already control.
+// "Show place/street labels" — draws city/village names from our own already-
+// loaded boundary data. Used the same way across all three base-map modes
+// now, since none of Stadia's raster styles we're using here ship a genuine
+// separate labels-only overlay compatible with this setup.
 async function loadPlaceLabels(){
   if (placeLabelsLayer) { map.addLayer(placeLabelsLayer); return; }
   try {
@@ -430,12 +430,10 @@ async function loadPlaceLabels(){
 
 function applyLabelsForMode(){
   const showLabels = document.getElementById('chk-labels').checked;
-  map.removeLayer(grayLabelsOverlay);
   if (placeLabelsLayer) map.removeLayer(placeLabelsLayer);
-  if (!showLabels) return;
-  if (currentBase === 'gray') grayLabelsOverlay.addTo(map);
-  else loadPlaceLabels();
+  if (showLabels) loadPlaceLabels();
 }
+
 
 function applyBaseMap(){
   Object.values(baseLayers).forEach(l => map.removeLayer(l));
