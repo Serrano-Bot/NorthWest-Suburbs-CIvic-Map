@@ -114,11 +114,11 @@
     <fieldset>
       <legend>Base map</legend>
       <label class="layer-row">
-        <input type="radio" name="basemap" id="base-color" checked>
+        <input type="radio" name="basemap" id="base-color">
         Streets (color)
       </label>
       <label class="layer-row">
-        <input type="radio" name="basemap" id="base-gray">
+        <input type="radio" name="basemap" id="base-gray" checked>
         Streets (grayscale)
       </label>
       <label class="layer-row">
@@ -129,7 +129,7 @@
         <input type="checkbox" id="chk-labels" checked>
         Show city/village name labels
       </label>
-      <div class="status" style="margin-left:0;" id="labels-note">Works in every base-map mode — drawn from our own city/village data, not a third-party label tile service.</div>
+      <div class="status" style="margin-left:0;" id="labels-note">In grayscale mode this is a real label-only map layer. In color/satellite mode (no matching layer available) it falls back to just city/village name labels.</div>
     </fieldset>
 
     <fieldset id="darkness-fieldset">
@@ -346,7 +346,7 @@
       or Palatine's village GIS site directly.
     </div>
     <div class="note" style="color:var(--mute); font-size:.68rem;">
-      Boundary data: U.S. Census Bureau TIGERweb (live). Basemaps: OpenStreetMap contributors / Esri.
+      Boundary data: U.S. Census Bureau TIGERweb (live). Basemaps: Stadia Maps / OpenStreetMap contributors.
     </div>
   </div>
   <div id="map-col" style="flex:1 1 auto; display:flex; flex-direction:column;">
@@ -366,34 +366,44 @@ const map = L.map('map', { zoomControl: true, minZoom: 10, maxZoom: 17 });
 const bounds = L.latLngBounds([41.955, -88.175], [42.125, -88.005]);
 map.fitBounds(bounds);
 
-const ATTR_USGS = 'Imagery: USGS The National Map';
+// Embedded API key: more reliable than domain authentication for a
+// classroom setting, since domain auth depends on the browser actually
+// sending a matching Referer header — which privacy-focused browsers, ad
+// blockers, and some school network filters strip or alter, breaking it
+// unpredictably across different students' devices even when correctly
+// configured. A visible key in page source is a low-stakes tradeoff for a
+// free-tier map key on a school project.
+const STADIA_KEY = '04b3fa71-86af-4536-8583-b4896a43e6e8';
+const ATTR_STADIA = '&copy; Stadia Maps &copy; Stamen Design &copy; OpenMapTiles &copy; OpenStreetMap contributors';
 
-// Base layers — one active at a time. Grayscale reuses the same OSM tiles
-// as color, just run through the darkening filter — this is deliberately
-// NOT a third-party "gray canvas" tile service, because those (CARTO, Esri)
-// have both quietly started requiring paid API keys, breaking silently.
-// Satellite uses USGS's own imagery service instead of Esri's for the same
-// reason: it's a US federal service with no key, not a commercial tile
-// product that can be paywalled later.
+function stadiaUrl(style){
+  return 'https://tiles.stadiamaps.com/tiles/'+style+'/{z}/{x}/{y}{r}.png?api_key='+STADIA_KEY;
+}
+
+// Base layers — one active at a time, all from Stadia Maps (OSM-sourced,
+// embeddable with a free API key, unlike the raw OSM tile servers which
+// block embedded/repeated use, or CARTO/Esri which now require paid keys).
+// Stadia's "stamen_toner_background" is genuinely label-free (unlike plain
+// OSM tiles), with "stamen_toner_labels" as a real separate overlay — so the
+// labels toggle actually controls something in grayscale mode now, not just
+// a workaround.
 const baseLayers = {
-  color: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
-  }),
-  gray: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
-  }),
-  sat: L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}', {
-    attribution: ATTR_USGS, maxZoom: 18
-  })
+  color: L.tileLayer(stadiaUrl('alidade_smooth'), { attribution: ATTR_STADIA, maxZoom: 20 }),
+  gray:  L.tileLayer(stadiaUrl('stamen_toner_background'), { attribution: ATTR_STADIA, maxZoom: 20 }),
+  sat:   L.tileLayer(stadiaUrl('alidade_satellite'), { attribution: ATTR_STADIA, maxZoom: 20 })
 };
+// Real labels-only overlay for grayscale mode (transparent, text/roads-labels
+// only). Color and satellite don't have a matching split style from Stadia,
+// so they keep falling back to our own city/village-name overlay for labels.
+const grayLabelsOverlay = L.tileLayer(stadiaUrl('stamen_toner_labels'), { attribution: ATTR_STADIA, maxZoom: 20, pane: 'overlayPane' });
 
-let currentBase = 'color';
+let currentBase = 'gray';
 let placeLabelsLayer = null;
 
-// "Show place/street labels" no longer depends on any third-party label
-// tile service (those keep getting paywalled). Instead it draws labels from
-// our OWN already-loaded city/village boundary data — genuinely reliable
-// since we control the data, and it works the same in every base-map mode.
+// "Show place/street labels" — in grayscale mode this now toggles Stadia's
+// real labels-only tile overlay. In color/satellite mode (no matching split
+// style available) it falls back to our own city/village-name overlay,
+// built from data we already control.
 async function loadPlaceLabels(){
   if (placeLabelsLayer) { map.addLayer(placeLabelsLayer); return; }
   try {
@@ -418,21 +428,30 @@ async function loadPlaceLabels(){
   } catch(e){ console.error('Could not load place labels.', e); }
 }
 
+function applyLabelsForMode(){
+  const showLabels = document.getElementById('chk-labels').checked;
+  map.removeLayer(grayLabelsOverlay);
+  if (placeLabelsLayer) map.removeLayer(placeLabelsLayer);
+  if (!showLabels) return;
+  if (currentBase === 'gray') grayLabelsOverlay.addTo(map);
+  else loadPlaceLabels();
+}
+
 function applyBaseMap(){
   Object.values(baseLayers).forEach(l => map.removeLayer(l));
   baseLayers[currentBase].addTo(map);
   document.getElementById('map').classList.toggle('mode-gray', currentBase === 'gray');
   document.getElementById('darkness-fieldset').style.display = (currentBase === 'gray') ? '' : 'none';
+  applyLabelsForMode();
 }
 
 document.getElementById('base-color').addEventListener('change', ()=>{ currentBase='color'; applyBaseMap(); });
 document.getElementById('base-gray').addEventListener('change', ()=>{ currentBase='gray'; applyBaseMap(); });
 document.getElementById('base-sat').addEventListener('change', ()=>{ currentBase='sat'; applyBaseMap(); });
-document.getElementById('chk-labels').addEventListener('change', (e)=>{
-  if (e.target.checked) loadPlaceLabels();
-  else if (placeLabelsLayer) map.removeLayer(placeLabelsLayer);
-});
-applyBaseMap();
+document.getElementById('chk-labels').addEventListener('change', applyLabelsForMode);
+baseLayers[currentBase].addTo(map);
+document.getElementById('map').classList.toggle('mode-gray', currentBase === 'gray');
+document.getElementById('darkness-fieldset').style.display = (currentBase === 'gray') ? '' : 'none';
 
 const bx = bounds.getWest()+','+bounds.getSouth()+','+bounds.getEast()+','+bounds.getNorth();
 // Wider envelope just for the general "school districts" layer, so it reaches
@@ -901,7 +920,7 @@ document.getElementById('btn-key').addEventListener('click', ()=>{
 
 // Deferred until here since it depends on layerDefs / getHsd211Boundary,
 // both defined later in the script than the base-map setup above.
-if (document.getElementById('chk-labels').checked) loadPlaceLabels();
+applyLabelsForMode();
 </script>
 </body>
 </html>
