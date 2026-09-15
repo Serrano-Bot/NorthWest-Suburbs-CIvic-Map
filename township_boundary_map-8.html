@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Schaumburg &amp; Palatine Townships — Base Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<style>
+  :root{
+    --ink:#000; --paper:#fff; --line:#000; --mute:#666; --hair:#bbb;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);
+    font-family: 'Georgia', 'Iowan Old Style', serif;}
+  #app{display:flex; height:100vh;}
+  #sidebar{
+    width:290px; flex:0 0 290px; border-right:2px solid var(--ink);
+    padding:20px 18px; overflow-y:auto;
+  }
+  #sidebar h1{
+    font-size:1.05rem; line-height:1.3; letter-spacing:.02em; margin:0 0 2px;
+    text-transform:uppercase; font-weight:700;
+  }
+  #sidebar .sub{
+    font-family: 'Courier New', monospace; font-size:.7rem; color:var(--mute);
+    letter-spacing:.04em; margin-bottom:18px; text-transform:uppercase;
+  }
+  fieldset{border:1px solid var(--ink); padding:10px 12px 12px; margin:0 0 14px;}
+  legend{
+    font-family:'Courier New',monospace; font-size:.68rem; letter-spacing:.08em;
+    text-transform:uppercase; padding:0 6px; color:var(--ink);
+  }
+  label.layer-row{
+    display:flex; align-items:center; gap:8px; font-size:.85rem; margin:7px 0;
+    cursor:pointer; user-select:none;
+  }
+  label.layer-row input{accent-color:#000; width:15px; height:15px; cursor:pointer;}
+  .swatch{width:18px; height:0; border-top-width:3px; border-top-style:solid; flex:0 0 18px;}
+  .opacity-row{ display:flex; align-items:center; gap:6px; margin:0 0 9px 26px; }
+  .opacity-row span{ font-family:'Courier New',monospace; font-size:.6rem; color:var(--mute); }
+  .opacity-row input[type=range]{ flex:1; accent-color:#000; height:12px; }
+  .status{font-family:'Courier New',monospace; font-size:.65rem; color:var(--mute); margin-left:26px;}
+  button.action{
+    width:100%; padding:9px 6px; margin-top:4px; background:var(--ink); color:var(--paper);
+    border:none; font-family:'Courier New',monospace; font-size:.72rem; letter-spacing:.06em;
+    text-transform:uppercase; cursor:pointer;
+  }
+  button.action.secondary{background:var(--paper); color:var(--ink); border:1px solid var(--ink);}
+  button.action:hover{opacity:.8;}
+  .note{font-size:.76rem; line-height:1.45; color:#222; margin:14px 0;}
+  .note[data-for]{display:none;}
+  .note[data-for].shown{display:block;}
+  .note a{color:var(--ink);}
+  .divider{border:none; border-top:1px solid var(--hair); margin:16px 0;}
+  #map{flex:1 1 auto; min-height:0;}
+  #map.mode-gray .leaflet-tile-pane{ filter: url(#roadDarken); }
+  .plabel{
+    font-family:'Courier New', monospace; font-size:10px; font-weight:700;
+    color:#000; text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+    white-space:nowrap; background:none; border:none; box-shadow:none;
+  }
+  .leaflet-tooltip:before{ display:none !important; } /* kill Leaflet's default tooltip arrow */
+  .sitelabel{
+    font-family:'Courier New', monospace; font-size:10px; font-weight:700;
+    color:#000; white-space:nowrap;
+    background:rgba(255,255,255,0.88); border:1px solid rgba(0,0,0,0.25);
+    border-radius:3px; padding:1px 5px; box-shadow:none;
+  }
+  .emoji-pin{ font-size:32px; line-height:1; text-align:center; filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff); }
+  select.psel{
+    width:100%; font-family:'Courier New',monospace; font-size:.75rem; padding:5px;
+    border:1px solid var(--ink); background:var(--paper); color:var(--ink); margin:4px 0 8px;
+  }
+  input.ptitle{
+    width:100%; font-family:'Georgia',serif; font-size:.85rem; padding:5px;
+    border:1px solid var(--ink); background:var(--paper); color:var(--ink); margin:4px 0 8px;
+  }
+  #printHeader{ display:none; }
+  @media print{
+    #sidebar{display:none;}
+    #app{height:auto; display:block;}
+    #map{height:calc(100vh - 70px); width:100%;}
+    .leaflet-control-zoom{display:none;}
+    .leaflet-tile-pane{ filter:none; }
+    #map{ filter: url(#roadDarken); }
+    #printHeader{
+      display:flex; justify-content:space-between; align-items:flex-end;
+      border-bottom:2px solid #000; padding-bottom:6px; margin-bottom:8px;
+      font-family:'Georgia',serif;
+    }
+    #printHeader .ph-title{font-size:1.1rem; font-weight:700; text-transform:uppercase;}
+    #printHeader .ph-sub{font-family:'Courier New',monospace; font-size:.7rem; color:#333;}
+    #printLegend{
+      font-family:'Courier New',monospace; font-size:.65rem; display:flex; gap:14px; flex-wrap:wrap;
+    }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="roadDarken" color-interpolation-filters="sRGB">
+    <feColorMatrix type="saturate" values="0"/>
+    <feComponentTransfer>
+      <feFuncR type="gamma" amplitude="1" exponent="1.9" offset="0"/>
+      <feFuncG type="gamma" amplitude="1" exponent="1.9" offset="0"/>
+      <feFuncB type="gamma" amplitude="1" exponent="1.9" offset="0"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+<div id="app">
+  <div id="sidebar">
+    <h1>Schaumburg &amp; Palatine Townships</h1>
+    <div class="sub">Cook County, Illinois — base map</div>
+
+    <fieldset>
+      <legend>Base map</legend>
+      <label class="layer-row">
+        <input type="radio" name="basemap" id="base-color">
+        Streets (color)
+      </label>
+      <label class="layer-row">
+        <input type="radio" name="basemap" id="base-gray" checked>
+        Streets (grayscale)
+      </label>
+      <label class="layer-row">
+        <input type="radio" name="basemap" id="base-sat">
+        Satellite
+      </label>
+      <label class="layer-row" style="margin-top:8px; border-top:1px solid var(--hair); padding-top:8px;">
+        <input type="checkbox" id="chk-labels" checked>
+        Show city/village name labels
+      </label>
+      <div class="status" style="margin-left:0;" id="labels-note">Shows city/village name labels, drawn from our own boundary data — works the same in every base-map mode.</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Find a location</legend>
+      <input type="text" id="search-input" placeholder="Enter an address (e.g. your house)"
+        style="width:100%; padding:6px; font-family:'Courier New',monospace; font-size:.72rem; border:1px solid var(--ink); margin-bottom:6px; box-sizing:border-box;">
+      <button class="action" id="btn-search">Drop a pin here</button>
+      <button class="action secondary" id="btn-clear-pins" style="margin-top:6px;">Clear pins</button>
+      <div class="status" id="search-status" style="margin-left:0; margin-top:4px;"></div>
+    </fieldset>
+
+    <fieldset id="darkness-fieldset">
+      <legend>Street darkness</legend>
+      <label class="layer-row" style="justify-content:space-between;">
+        <span>Lighter</span>
+        <input type="range" id="rng-dark" min="1" max="3.2" step="0.1" value="1.9" style="flex:1; margin:0 8px; accent-color:#000;">
+        <span>Darker</span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Boundary layers</legend>
+
+      <label class="layer-row">
+        <input type="checkbox" id="chk-county">
+        <span class="swatch" id="sw-county" style="border-top-color:#000; border-top-width:2.5px;"></span>
+        Counties (Cook + bordering)
+      </label>
+      <div class="opacity-row"><span>Fill</span><input type="range" id="op-county" min="0" max="0.9" step="0.05" value="0.3"><span id="opval-county">30%</span></div>
+
+      <label class="layer-row">
+        <input type="checkbox" id="chk-township">
+        <span class="swatch" id="sw-township" style="border-top-color:#000;"></span>
+        Township lines
+      </label>
+      <div class="opacity-row"><span>Fill</span><input type="range" id="op-township" min="0" max="0.9" step="0.05" value="0.35"><span id="opval-township">35%</span></div>
+
+      <label class="layer-row">
+        <input type="checkbox" id="chk-place">
+        <span class="swatch" id="sw-place" style="border-top-color:#000; border-top-style:dashed;"></span>
+        City / village limits
+      </label>
+      <div class="opacity-row"><span>Fill</span><input type="range" id="op-place" min="0" max="0.9" step="0.05" value="0.35"><span id="opval-place">35%</span></div>
+
+      <label class="layer-row">
+        <input type="checkbox" id="chk-tract">
+        <span class="swatch" id="sw-tract" style="border-top-color:#000; border-top-width:1px;"></span>
+        Census tracts
+      </label>
+      <div class="opacity-row"><span>Fill</span><input type="range" id="op-tract" min="0" max="0.9" step="0.05" value="0.3"><span id="opval-tract">30%</span></div>
+
+      <label class="layer-row">
+        <input type="checkbox" id="chk-school">
+        <span class="swatch" id="sw-school" style="border-top-color:#000; border-top-style:dotted; border-top-width:4px;"></span>
+        Neighboring school districts
+      </label>
+      <div class="opacity-row"><span>Fill</span><input type="range" id="op-school" min="0" max="0.9" step="0.05" value="0.35"><span id="opval-school">35%</span></div>
+
+      <label class="layer-row">
+        <input type="checkbox" id="chk-hsd211">
+        <span class="swatch" id="sw-hsd211" style="border-top-color:#000; border-top-width:4px;"></span>
+        HSD 211 boundary
+      </label>
+      <div class="opacity-row"><span>Fill</span><input type="range" id="op-hsd211" min="0" max="0.9" step="0.05" value="0"><span id="opval-hsd211">0%</span></div>
+
+      <label class="layer-row">
+        <input type="checkbox" id="chk-d54">
+        <span class="swatch" id="sw-d54" style="border-top-color:#000; border-top-width:2px; border-top-style:solid;"></span>
+        D54 school boundaries + points
+      </label>
+      <div class="opacity-row"><span>Fill</span><input type="range" id="op-d54" min="0" max="0.9" step="0.05" value="0.4"><span id="opval-d54">40%</span></div>
+
+      <label class="layer-row">
+        <input type="checkbox" id="chk-hsbounds">
+        <span class="swatch" id="sw-hsbounds" style="border-top-color:#000; border-top-width:2px; border-top-style:solid;"></span>
+        HS attendance boundaries + schools/office
+      </label>
+      <div class="opacity-row"><span>Fill</span><input type="range" id="op-hsbounds" min="0" max="0.9" step="0.05" value="0.4"><span id="opval-hsbounds">40%</span></div>
+
+      <label class="layer-row">
+        <input type="checkbox" id="chk-precincts">
+        <span class="swatch" id="sw-precincts" style="border-top-color:#000; border-top-width:1px; border-top-style:dashed;"></span>
+        Voting precincts (Schaumburg + Palatine Twp)
+      </label>
+      <div class="opacity-row"><span>Fill</span><input type="range" id="op-precincts" min="0" max="0.9" step="0.05" value="0.3"><span id="opval-precincts">30%</span></div>
+
+      <label class="layer-row">
+        <input type="checkbox" id="chk-highways">
+        <span class="swatch" id="sw-highways" style="border-top-color:#e10600; border-top-width:3px;"></span>
+        Major highways / expressways
+      </label>
+      <div class="opacity-row"><span>Line</span><input type="range" id="op-highways" min="0.2" max="1" step="0.05" value="0.9"><span id="opval-highways">90%</span></div>
+      <div class="status" id="status"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Print setup</legend>
+      <input type="text" class="ptitle" id="in-title" value="Schaumburg &amp; Palatine Townships">
+      <select class="psel" id="sel-size">
+        <option value="letter">Letter (8.5×11 in)</option>
+        <option value="legal">Legal (8.5×14 in)</option>
+        <option value="tabloid">Tabloid (11×17 in)</option>
+      </select>
+      <select class="psel" id="sel-orient">
+        <option value="landscape">Landscape</option>
+        <option value="portrait">Portrait</option>
+      </select>
+    </fieldset>
+
+    <button class="action" id="btn-print">Print current view</button>
+    <button class="action secondary" id="btn-fit-schaumburg">Zoom to Schaumburg Twp</button>
+    <button class="action secondary" id="btn-fit211">Zoom to HSD 211</button>
+    <button class="action secondary" id="btn-blank">Blank map (roads only)</button>
+
+    <div class="note">
+      <strong>Printing:</strong> set the title, paper size, and orientation above,
+      then use "Print current view." The printed sheet gets its own header with a
+      name/date line and an auto-built legend of whatever layers are turned on.
+    </div>
+    <hr class="divider">
+    <div class="note" data-for="chk-township">
+      <strong>Township:</strong> the oldest layer of local government here,
+      set up when Illinois was first surveyed in the 1800s. Its jobs are road
+      and bridge upkeep outside city limits, property assessment, and General
+      Assistance aid for residents in need — run by an elected supervisor and
+      trustees. Boundaries are essentially permanent. <em>For example:</em>
+      plowing snow on an unincorporated street, running a food pantry or
+      emergency rent assistance program, assessing your home's value for the
+      tax bill, and maintaining a bridge outside any city's limits.
+    </div>
+    <div class="note" data-for="chk-place">
+      <strong>City / village:</strong> a self-governing municipality created
+      when residents voted to incorporate. Handles the most visible day-to-day
+      services — police, fire, water/sewer, local streets, parks, zoning — run
+      by an elected mayor/president and council. Boundaries can grow over time
+      through annexation as nearby landowners petition to join. <em>For
+      example:</em> a 911 police response, issuing a building permit for a
+      home addition, deciding the local speed limit, and approving (or
+      denying) a zoning variance for a new store.
+    </div>
+    <div class="note" data-for="chk-school">
+      <strong>Neighboring school district:</strong> an independent unit of government —
+      separate from any city or township — whose only job is running public
+      schools: hiring staff, setting curriculum, and levying the property tax
+      that pays for it. Governed by an elected school board. Boundaries rarely
+      change, though a shrinking district can be dissolved into a neighbor.
+      <em>For example:</em> setting the school calendar and snow days, hiring
+      a new principal, approving a new curriculum, and negotiating the
+      teachers' union contract.
+    </div>
+    <div class="note" data-for="chk-hsd211 chk-hsbounds">
+      <strong>HSD 211:</strong> runs the five public high schools here (grades
+      9–12 only — elementary/middle schools belong to separate districts like
+      D54), governed by an elected board from its administration center in
+      Palatine. Attendance-boundary toggle uses a 2015–16 federal survey, the
+      best public approximation available — for the current official version,
+      see <a href="D211_official_boundary_map.pdf" target="_blank">D211_official_boundary_map.pdf</a>.
+      <em>For example:</em> setting graduation requirements, adding a new AP
+      course at Schaumburg HS, hiring the superintendent, and passing the
+      district's annual budget.
+    </div>
+    <div class="note" data-for="chk-d54">
+      <strong>D54:</strong> Schaumburg CCSD 54 runs the elementary/middle
+      schools feeding into HSD 211 — the largest elementary district in
+      Illinois by enrollment. Same governance structure as HSD 211, and the
+      same 2015–16 survey caveat applies to its attendance-zone toggle.
+      <em>For example:</em> deciding which elementary school your street is
+      zoned for, hiring elementary teachers, approving all-day kindergarten,
+      and building a new school when a neighborhood grows.
+    </div>
+    <div class="note" data-for="chk-tract">
+      <strong>Census tract:</strong> drawn by the Census Bureau purely for
+      counting and statistics (~4,000 people each) — no elected officials,
+      no services, no taxes. Redrawn every 10 years after each census.
+      <em>For example:</em> calculating a neighborhood's poverty rate,
+      deciding eligibility for federal community-development grants, and
+      helping a school district or retailer figure out where population is
+      growing.
+    </div>
+    <div class="note" data-for="chk-county">
+      <strong>County:</strong> the layer of government above townships and
+      cities. Runs courts, the sheriff and jail, tax assessment/collection,
+      elections, and public health — governed by an elected county board.
+      Boundaries were fixed in the 1800s and essentially never change.
+      <em>For example:</em> issuing marriage licenses, running the county
+      jail, mailing your property tax bill, and operating public health
+      clinics that give vaccines.
+    </div>
+    <div class="note" style="color:var(--mute); font-size:.68rem;">
+      Not included: Community College, Fire Protection, Public Library, Park,
+      and Water/Sanitary districts (also shown in Schaumburg Township's
+      official precinct package) — no current, reliably public live-data
+      source was found for these, so they were left out rather than guessed.
+    </div>
+    <div class="note" data-for="chk-precincts">
+      <strong>Voting precinct:</strong> the smallest unit of election
+      administration — each has one polling place and its own local ballot.
+      Precincts don't govern anything; they exist purely to organize voting.
+      The county clerk redraws lines periodically, usually after
+      redistricting following each census. <em>For example:</em> deciding
+      which building you vote in, which exact races appear on your ballot,
+      and how election results get counted and reported.
+    </div>
+    <div class="note" style="color:var(--mute); font-size:.68rem;">
+      Boundary data: U.S. Census Bureau TIGERweb (live). Basemaps: Stadia Maps / OpenStreetMap contributors.
+    </div>
+  </div>
+  <div id="map-col" style="flex:1 1 auto; display:flex; flex-direction:column;">
+    <div id="printHeader">
+      <div>
+        <div class="ph-title" id="ph-title">Schaumburg &amp; Palatine Townships</div>
+        <div class="ph-sub">Name: _______________________  Date: ____________</div>
+      </div>
+      <div id="printLegend"></div>
+    </div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<script>
+const map = L.map('map', { zoomControl: true, minZoom: 10, maxZoom: 17 });
+const bounds = L.latLngBounds([41.955, -88.175], [42.125, -88.005]);
+map.fitBounds(bounds);
+
+// Embedded API key: more reliable than domain authentication for a
+// classroom setting, since domain auth depends on the browser actually
+// sending a matching Referer header — which privacy-focused browsers, ad
+// blockers, and some school network filters strip or alter, breaking it
+// unpredictably across different students' devices even when correctly
+// configured. A visible key in page source is a low-stakes tradeoff for a
+// free-tier map key on a school project.
+const STADIA_KEY = '04b3fa71-86af-4536-8583-b4896a43e6e8';
+const ATTR_STADIA = '&copy; Stadia Maps &copy; Stamen Design &copy; OpenMapTiles &copy; OpenStreetMap contributors';
+
+function stadiaUrl(style){
+  return 'https://tiles.stadiamaps.com/tiles/'+style+'/{z}/{x}/{y}{r}.png?api_key='+STADIA_KEY;
+}
+
+// Base layers — one active at a time, all from Stadia Maps (OSM-sourced,
+// embeddable with a free API key, unlike the raw OSM tile servers which
+// block embedded/repeated use, or CARTO/Esri which now require paid keys).
+// Grayscale uses "stamen_toner_lite" — softer grayscale (grays instead of
+// solid black for water/vegetation) than the bolder stamen_toner_background.
+// Trade-off: it's a single composited style with labels baked in, so it
+// falls back to our own city/village-name overlay for labels, same as
+// color/satellite, rather than a true separate labels toggle.
+const baseLayers = {
+  color: L.tileLayer(stadiaUrl('alidade_smooth'), { attribution: ATTR_STADIA, maxZoom: 20 }),
+  gray:  L.tileLayer(stadiaUrl('stamen_toner_lite'), { attribution: ATTR_STADIA, maxZoom: 20 }),
+  sat:   L.tileLayer(stadiaUrl('alidade_satellite'), { attribution: ATTR_STADIA, maxZoom: 20 })
+};
+// Real labels-only overlay for grayscale mode (transparent, text/roads-labels
+// only). Color and satellite don't have a matching split style from Stadia,
+// so they keep falling back to our own city/village-name overlay for labels.
+
+let currentBase = 'gray';
+let placeLabelsLayer = null;
+
+// "Show place/street labels" — draws city/village names from our own already-
+// loaded boundary data. Used the same way across all three base-map modes
+// now, since none of Stadia's raster styles we're using here ship a genuine
+// separate labels-only overlay compatible with this setup.
+async function loadPlaceLabels(){
+  if (placeLabelsLayer) { map.addLayer(placeLabelsLayer); return; }
+  try {
+    const district = await getHsd211Boundary();
+    const geo = await fetch(layerDefs.place.url).then(r=>r.json());
+    const feats = geo.features.filter(f =>
+      district.features.some(df => { try { return turf.booleanIntersects(f, df); } catch(e){ return false; } })
+    );
+    const group = L.layerGroup();
+    feats.forEach(f=>{
+      let c; try { c = turf.centroid(f).geometry.coordinates; } catch(e){ return; }
+      const nm = (f.properties||{}).BASENAME || (f.properties||{}).NAME || '';
+      if (!nm) return;
+      const marker = L.marker([c[1], c[0]], { icon: L.divIcon({className:'', html:'', iconSize:[0,0]}), interactive:false });
+      marker.bindTooltip(nm, { permanent:true, direction:'center', className:'plabel' });
+      group.addLayer(marker);
+      marker.on('add', () => marker.openTooltip());
+    });
+    placeLabelsLayer = group;
+    placeLabelsLayer.addTo(map);
+    group.eachLayer(m => m.openTooltip());
+  } catch(e){ console.error('Could not load place labels.', e); }
+}
+
+function applyLabelsForMode(){
+  const showLabels = document.getElementById('chk-labels').checked;
+  if (placeLabelsLayer) map.removeLayer(placeLabelsLayer);
+  if (showLabels) loadPlaceLabels();
+}
+
+
+function applyBaseMap(){
+  Object.values(baseLayers).forEach(l => map.removeLayer(l));
+  baseLayers[currentBase].addTo(map);
+  document.getElementById('map').classList.toggle('mode-gray', currentBase === 'gray');
+  document.getElementById('darkness-fieldset').style.display = (currentBase === 'gray') ? '' : 'none';
+  applyLabelsForMode();
+}
+
+document.getElementById('base-color').addEventListener('change', ()=>{ currentBase='color'; applyBaseMap(); });
+document.getElementById('base-gray').addEventListener('change', ()=>{ currentBase='gray'; applyBaseMap(); });
+document.getElementById('base-sat').addEventListener('change', ()=>{ currentBase='sat'; applyBaseMap(); });
+document.getElementById('chk-labels').addEventListener('change', applyLabelsForMode);
+baseLayers[currentBase].addTo(map);
+document.getElementById('map').classList.toggle('mode-gray', currentBase === 'gray');
+document.getElementById('darkness-fieldset').style.display = (currentBase === 'gray') ? '' : 'none';
+
+const bx = bounds.getWest()+','+bounds.getSouth()+','+bounds.getEast()+','+bounds.getNorth();
+// Wider envelope just for the general "school districts" layer, so it reaches
+// far enough to pick up District 214 to the east and Lake Park 108 to the south
+// (bbox only needs to touch a district's shape — the full polygon still loads).
+const schoolBx = '-88.25,41.82,-87.82,42.20';
+function tigerUrl(service, layer, envelope){
+  return 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/'+service+'/MapServer/'+layer+
+    '/query?where=1%3D1&geometry='+encodeURIComponent(envelope||bx)+
+    '&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects'+
+    '&outFields=*&outSR=4326&f=geojson';
+}
+
+const layerDefs = {
+  township: { url: tigerUrl('Places_CouSub_ConCity_SubMCD',1), dash:null, weight:2.5, nameField:'BASENAME', chk:'chk-township', op:'op-township' },
+  place:    { url: tigerUrl('Places_CouSub_ConCity_SubMCD',4), dash:'8,4', weight:2, nameField:'BASENAME', chk:'chk-place', op:'op-place', filterToDistrict:true },
+  school:   {
+    urls: [ tigerUrl('School',0,schoolBx), tigerUrl('School',1,schoolBx) ], // Unified + Secondary, merged
+    dash:'1,5', weight:3, nameField:'BASENAME', chk:'chk-school', op:'op-school'
+  },
+  tract:    { url: tigerUrl('Tracts_Blocks',0), dash:null, weight:1, nameField:'GEOID', chk:'chk-tract', op:'op-tract', noLabel:true, filterToTownship:true },
+  hsd211:   {
+    url: 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/School/MapServer/1/query?where='+
+         encodeURIComponent("STATE='17' AND NAME LIKE '%211%'")+
+         '&outFields=*&outSR=4326&f=geojson',
+    dash:null, weight:4, nameField:'NAME', chk:'chk-hsd211', op:'op-hsd211'
+  },
+  hsbounds: {
+    url: 'https://nces.ed.gov/opengis/rest/services/K12_School_Locations/SABS_1516/MapServer/0/query?where='+
+         encodeURIComponent("leaid='1730450'")+
+         '&outFields=*&outSR=4326&f=geojson',
+    dash:null, weight:2, nameField:'schnam', chk:'chk-hsbounds', op:'op-hsbounds',
+    // Named directly rather than relying on adjacency detection — that kept
+    // collapsing to one color on this particular geometry, so this guarantees
+    // each of the five known schools gets its own fixed, distinct color no
+    // matter what Turf makes of the polygon topology.
+    nameColorMap: {
+      'conant': '#d62828', 'fremd': '#003049', 'hoffman': '#fcbf49',
+      'palatine': '#588157', 'schaumburg': '#7b2cbf'
+    },
+    // Its own palette, distinct from the general PALETTE, so it doesn't
+    // blend visually with whatever else is stacked underneath/above it.
+    palette: ['#d62828','#003049','#fcbf49','#588157','#7b2cbf','#ff7f51']
+  },
+  d54bounds: {
+    url: 'https://nces.ed.gov/opengis/rest/services/K12_School_Locations/SABS_1516/MapServer/0/query?where='+
+         encodeURIComponent("leaid='1734740'")+
+         '&outFields=*&outSR=4326&f=geojson',
+    dash:null, weight:2, nameField:'schnam', chk:'chk-d54', op:'op-d54'
+  },
+  precincts: {
+    // Switched away from gis12.cookcountyil.gov entirely — that's an
+    // internal county ArcGIS server, not built for external browser access,
+    // and most likely just doesn't send the CORS headers a browser requires
+    // (which would explain every previous fix attempt failing identically
+    // regardless of query shape). This instead uses Cook County's actual
+    // public Open Data platform (Socrata), which is explicitly built for
+    // external API/browser consumption. $limit raised well past the ~1430
+    // countywide precinct count so nothing gets cut off before our own
+    // client-side township filter runs.
+    url: 'https://datacatalog.cookcountyil.gov/resource/k7sw-w3b8.geojson?$limit=5000',
+    dash:'2,2', weight:1, nameField:'precinct_number', chk:'chk-precincts', op:'op-precincts',
+    noLabel:true, filterToTownship:true
+  },
+  county: {
+    // Bbox just big enough to touch every county bordering Cook (DuPage, Kane,
+    // Lake IL, McHenry, Will, and Lake IN) — bbox only needs to intersect, so
+    // Cook's actual neighbors all load in full regardless of this box's size.
+    url: tigerUrl('State_County', 11, '-88.65,41.35,-87.20,42.50'),
+    dash:null, weight:2.5, nameField:'BASENAME', chk:'chk-county', op:'op-county'
+  },
+  highways: {
+    // TIGERweb's "Primary Roads" layer = interstates and other limited-access
+    // divided highways (MTFCC S1100) — exactly "major highways/expressways",
+    // not every arterial street. Lines only, so no fill — fixed red stroke.
+    url: tigerUrl('Transportation_LargeScale', 0, '-88.65,41.35,-87.20,42.50'),
+    weight:3, nameField:'NAME', chk:'chk-highways', op:'op-highways',
+    fixedColor:'#e10600', lineOnly:true
+  }
+};
+
+// Hand-picked vivid colors (not formula-generated pastels) ordered so the
+// first several picks are already maximally spread around the wheel — a
+// small adjacency chain (like 4-5 touching school zones) draws from just
+// the first several entries, and washed-out HSL rotations read as muddy
+// once blended at low opacity over the grayscale basemap, so these are
+// saturated enough to stay punchy even at 30-40% fill.
+const PALETTE = ['#ef233c','#00b4d8','#80ed99','#7209b7','#fb8500','#ff006e',
+                  '#3a86ff','#ffd60a','#006d77','#3f37c9','#38b000','#9d4edd'];
+
+let hsd211BoundaryPromise = null;
+function getHsd211Boundary(){
+  if (!hsd211BoundaryPromise) hsd211BoundaryPromise = fetch(layerDefs.hsd211.url).then(r=>r.json());
+  return hsd211BoundaryPromise;
+}
+
+// Greedy graph coloring: build a touching/overlap adjacency graph with Turf,
+// then assign each feature the lowest-index palette color not used by any
+// neighbor that's already been assigned. O(n²) in feature count — fine for
+// the small layers this runs on (a handful of schools/districts/counties),
+// but NOT fine for something like every stream segment in six counties, so
+// callers with large or thematically-uniform layers (water!) should use
+// fixedColor instead and skip this entirely.
+function assignDistinctColors(features, palette){
+  palette = palette || PALETTE;
+  const n = features.length;
+  const adj = Array.from({length:n}, ()=>[]);
+  let edgeCount = 0;
+  for (let i=0;i<n;i++){
+    for (let j=i+1;j<n;j++){
+      let touches = false;
+      try { touches = turf.booleanIntersects(features[i], features[j]); } catch(e){}
+      if (touches){ adj[i].push(j); adj[j].push(i); edgeCount++; }
+    }
+  }
+  // If nothing was detected as touching despite there being multiple features,
+  // that's almost always a sign real-world geometry (survey data, etc.) broke
+  // Turf's intersection test on every single pair rather than genuine
+  // isolation — fall back to simple round-robin so colors still vary instead
+  // of every feature defaulting to the same first palette entry.
+  if (edgeCount === 0 && n > 1){
+    return features.map((f,i) => palette[i % palette.length]);
+  }
+  const colorIdx = new Array(n).fill(-1);
+  for (let i=0;i<n;i++){
+    const used = new Set(adj[i].filter(j=>colorIdx[j]>=0).map(j=>colorIdx[j]));
+    let c = 0; while (used.has(c)) c++;
+    colorIdx[i] = c % palette.length;
+  }
+  return colorIdx.map(c => palette[c]);
+}
+
+const active = {};
+const statusEl = document.getElementById('status');
+function setStatus(msg){ statusEl.textContent = msg; }
+
+async function loadLayer(key){
+  const d = layerDefs[key];
+  if (active[key]) { map.addLayer(active[key]); return; }
+  setStatus('Loading '+key+' …');
+  try{
+    let geo;
+    if (key === 'hsd211') {
+      geo = await getHsd211Boundary();
+    } else if (d.urls) {
+      const results = await Promise.all(d.urls.map(u => fetch(u).then(r=>r.json())));
+      geo = { type:'FeatureCollection', features: results.flatMap(r => r.features || []) };
+    } else {
+      geo = await fetch(d.url).then(r=>r.json());
+    }
+    if (d.filterToDistrict) {
+      const district = await getHsd211Boundary();
+      geo = { type:'FeatureCollection', features: geo.features.filter(f =>
+        district.features.some(df => { try { return turf.booleanIntersects(f, df); } catch(e){ return false; } })
+      )};
+    }
+    if (d.filterToTownship) {
+      const twp = await getTownshipBoundary();
+      geo = { type:'FeatureCollection', features: geo.features.filter(f =>
+        twp.features.some(tf => { try { return turf.booleanIntersects(f, tf); } catch(e){ return false; } })
+      )};
+    }
+    const colors = d.fixedColor ? null : assignDistinctColors(geo.features, d.palette);
+    const opacityNow = parseFloat(document.getElementById(d.op).value);
+    let idx = 0;
+    const lyr = L.geoJSON(geo, {
+      style: (feature) => {
+        if (d.lineOnly) return { color: d.fixedColor, weight:d.weight, opacity: opacityNow };
+        let fillColor = d.fixedColor || colors[idx++];
+        if (d.nameColorMap) {
+          const nm = ((feature.properties||{})[d.nameField] || '').toLowerCase();
+          const matchKey = Object.keys(d.nameColorMap).find(k => nm.includes(k));
+          if (matchKey) fillColor = d.nameColorMap[matchKey];
+        }
+        return { color: d.strokeColor || '#000', weight:d.weight, dashArray:d.dash, fillOpacity:opacityNow, fillColor };
+      },
+      onEachFeature: (f, layer) => {
+        const p = f.properties || {};
+        const nm = p[d.nameField] || p.BASENAME || p.NAME || p.schnam || p.name || '';
+        if (!nm) return;
+        if (d.noLabel) layer.bindPopup(nm);
+        else layer.bindTooltip(nm, {permanent:true, direction:'center', className:'plabel'});
+      }
+    });
+    active[key] = lyr;
+    lyr.addTo(map);
+    setStatus('');
+  } catch(e){ setStatus('Could not load '+key+' layer.'); console.error(e); }
+}
+
+// District 211 high schools + administration building
+const hsd211Sites = [
+  { name:'James B. Conant HS', addr:'700 E. Cougar Trail, Hoffman Estates', lat:42.0374, lon:-88.0627, type:'school' },
+  { name:'William Fremd HS',   addr:'1000 S. Quentin Rd, Palatine',        lat:42.0943, lon:-88.0661, type:'school' },
+  { name:'Hoffman Estates HS', addr:'1100 W. Higgins Rd, Hoffman Estates', lat:42.0539, lon:-88.1067, type:'school' },
+  { name:'Palatine HS',        addr:'1111 N. Rohlwing Rd, Palatine',       lat:42.1314, lon:-88.0217, type:'school' },
+  { name:'Schaumburg HS',      addr:'1100 W. Schaumburg Rd, Schaumburg',   lat:42.0283, lon:-88.1072, type:'school' },
+  { name:'D211 Admin (G.A. McElroy Center)', addr:'1750 S. Roselle Rd, Palatine', lat:null, lon:null, type:'office' }
+];
+let hsd211SitesLayer = null;
+
+// Emoji "pins" — doubled in size from the old unicode-dot markers, with the
+// label placed diagonally (up-and-right) off the icon instead of directly
+// beside it, and a light background box behind the text for legibility over
+// busy colored fills.
+function emojiIcon(emoji, size){
+  size = size || 32;
+  return L.divIcon({
+    className:'', html:'<div class="emoji-pin" style="font-size:'+size+'px;">'+emoji+'</div>',
+    iconSize:[size,size], iconAnchor:[size/2, size]
+  });
+}
+function bindDiagonalLabel(marker, text){
+  marker.bindTooltip(text, {
+    permanent:false, direction:'right', className:'sitelabel', offset:[8,-18]
+  });
+  // Leaflet's default non-permanent tooltip opens on hover; we want it
+  // hidden until the student actually clicks the icon, so drop the hover
+  // handlers bindTooltip just attached and drive it from click instead.
+  marker.off('mouseover mouseout mousemove');
+  marker.on('click', function(){
+    if (this.isTooltipOpen()) this.closeTooltip(); else this.openTooltip();
+  });
+}
+
+function buildSitesLayer(){
+  const group = L.layerGroup();
+  hsd211Sites.forEach(s=>{
+    if (s.lat==null) return; // office added once geocoded
+    const icon = s.type === 'office' ? emojiIcon('📍') : emojiIcon('🏫');
+    const m = L.marker([s.lat,s.lon], {icon});
+    bindDiagonalLabel(m, s.name);
+    group.addLayer(m);
+  });
+  return group;
+}
+
+function loadHsd211Sites(){
+  if (hsd211SitesLayer) { map.addLayer(hsd211SitesLayer); return; }
+  const office = hsd211Sites.find(s=>s.type==='office');
+  setStatus('Locating district office …');
+  fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+
+        encodeURIComponent(office.addr+', IL, USA'))
+    .then(r=>r.json())
+    .then(res=>{
+      if (res && res[0]) { office.lat = parseFloat(res[0].lat); office.lon = parseFloat(res[0].lon); }
+      else { office.lat = 42.1003; office.lon = -88.0836; } // fallback estimate
+    })
+    .catch(()=>{ office.lat = 42.1003; office.lon = -88.0836; })
+    .finally(()=>{
+      hsd211SitesLayer = buildSitesLayer();
+      hsd211SitesLayer.addTo(map);
+      setStatus('');
+    });
+}
+
+document.getElementById('chk-hsbounds').addEventListener('change', (e)=>{
+  if (e.target.checked) { loadLayer('hsbounds'); loadHsd211Sites(); }
+  else { if (active.hsbounds) map.removeLayer(active.hsbounds); if (hsd211SitesLayer) map.removeLayer(hsd211SitesLayer); }
+});
+
+// D54 school point locations — fetched live (27 schools, not worth hand-typing)
+let d54SitesLayer = null;
+function buildD54SitesLayer(geo){
+  const group = L.layerGroup();
+  (geo.features||[]).forEach(f=>{
+    const [lon,lat] = f.geometry.coordinates;
+    const nm = (f.properties && (f.properties.NAME || f.properties.SCH_NAME)) || 'School';
+    const m = L.marker([lat,lon], {icon: emojiIcon('🏫')});
+    bindDiagonalLabel(m, nm);
+    group.addLayer(m);
+  });
+  return group;
+}
+function loadD54Sites(){
+  if (d54SitesLayer) { map.addLayer(d54SitesLayer); return; }
+  setStatus('Loading D54 school locations …');
+  fetch('https://nces.ed.gov/opengis/rest/services/K12_School_Locations/EDGE_GEOCODE_PUBLICSCH_1920/MapServer/0/query?where='+
+        encodeURIComponent("LEAID='1734740'")+'&outFields=*&outSR=4326&f=geojson')
+    .then(r=>r.json())
+    .then(geo=>{ d54SitesLayer = buildD54SitesLayer(geo); d54SitesLayer.addTo(map); setStatus(''); })
+    .catch(e=>{ setStatus('Could not load D54 school points.'); console.error(e); });
+}
+document.getElementById('chk-d54').addEventListener('change', (e)=>{
+  if (e.target.checked) { loadLayer('d54bounds'); loadD54Sites(); }
+  else { if (active.d54bounds) map.removeLayer(active.d54bounds); if (d54SitesLayer) map.removeLayer(d54SitesLayer); }
+});
+
+let townshipBoundaryPromise = null;
+function getTownshipBoundary(){
+  if (!townshipBoundaryPromise) townshipBoundaryPromise = fetch(layerDefs.township.url).then(r=>r.json());
+  return townshipBoundaryPromise;
+}
+
+// "Find a location" — lets a student type an address (e.g. their own house)
+// and drop a pin there, so they can visually compare it against whichever
+// boundary layers are turned on. Geocoded via Nominatim (OpenStreetMap),
+// same free service already used for the district office lookup.
+const searchPinsLayer = L.layerGroup().addTo(map);
+function searchAndDropPin(){
+  const input = document.getElementById('search-input');
+  const status = document.getElementById('search-status');
+  const q = input.value.trim();
+  if (!q) return;
+  status.textContent = 'Searching…';
+  fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q))
+    .then(r=>r.json())
+    .then(res=>{
+      if (!res || !res[0]) { status.textContent = 'No match found — try a more specific address.'; return; }
+      const lat = parseFloat(res[0].lat), lon = parseFloat(res[0].lon);
+      const label = q.length > 30 ? q.slice(0,30)+'…' : q;
+      const m = L.marker([lat,lon], { icon: emojiIcon('📍') });
+      bindDiagonalLabel(m, label);
+      m.addTo(searchPinsLayer);
+      map.setView([lat,lon], 15);
+      status.textContent = '';
+    })
+    .catch(()=>{ status.textContent = 'Search failed — check your connection and try again.'; });
+}
+document.getElementById('btn-search').addEventListener('click', searchAndDropPin);
+document.getElementById('search-input').addEventListener('keydown', (e)=>{ if (e.key === 'Enter') searchAndDropPin(); });
+document.getElementById('btn-clear-pins').addEventListener('click', ()=>{
+  searchPinsLayer.clearLayers();
+  document.getElementById('search-status').textContent = '';
+});
+
+function wireOpacitySlider(key){
+  const d = layerDefs[key];
+  const rng = document.getElementById(d.op);
+  const out = document.getElementById('opval-'+key);
+  rng.addEventListener('input', ()=>{
+    out.textContent = Math.round(rng.value*100) + '%';
+    if (active[key]) active[key].eachLayer(l => l.setStyle(
+      d.lineOnly ? { opacity: parseFloat(rng.value) } : { fillOpacity: parseFloat(rng.value) }
+    ));
+  });
+}
+Object.keys(layerDefs).forEach(wireOpacitySlider);
+
+Object.keys(layerDefs).forEach(key=>{
+  if (key === 'd54bounds' || key === 'hsbounds') return; // handled by combined listeners
+  const chk = document.getElementById(layerDefs[key].chk);
+  chk.addEventListener('change', ()=>{
+    if (chk.checked) loadLayer(key);
+    else if (active[key]) { map.removeLayer(active[key]); map.closePopup(); }
+  });
+});
+
+const rng = document.getElementById('rng-dark');
+const gammaFuncs = document.querySelectorAll('#roadDarken feFuncR, #roadDarken feFuncG, #roadDarken feFuncB');
+rng.addEventListener('input', ()=>{
+  gammaFuncs.forEach(f=>f.setAttribute('exponent', rng.value));
+});
+
+document.getElementById('btn-fit-schaumburg').addEventListener('click', async ()=>{
+  document.getElementById('chk-township').checked = true;
+  await loadLayer('township');
+  let target = null;
+  active.township.eachLayer(l=>{
+    const nm = (l.feature && l.feature.properties && (l.feature.properties.BASENAME || l.feature.properties.NAME)) || '';
+    if (nm.toLowerCase().includes('schaumburg')) target = l;
+  });
+  if (target) map.fitBounds(target.getBounds(), {padding:[20,20]});
+});
+
+document.getElementById('btn-fit211').addEventListener('click', ()=>{
+  document.getElementById('chk-hsd211').checked = true;
+  loadLayer('hsd211');
+  setTimeout(()=>{ if (active.hsd211) map.fitBounds(active.hsd211.getBounds(), {padding:[20,20]}); }, 900);
+});
+
+// ---- Print setup: page size/orientation, title sync, legend build ----
+const pageSizes = {
+  letter: {w:8.5, h:11}, legal:{w:8.5, h:14}, tabloid:{w:11, h:17}
+};
+const pageStyleEl = document.createElement('style');
+document.head.appendChild(pageStyleEl);
+
+function applyPageSetup(){
+  const size = pageSizes[document.getElementById('sel-size').value];
+  const orient = document.getElementById('sel-orient').value;
+  const w = orient==='landscape' ? Math.max(size.w,size.h) : Math.min(size.w,size.h);
+  const h = orient==='landscape' ? Math.min(size.w,size.h) : Math.max(size.w,size.h);
+  pageStyleEl.textContent = '@page{ size: '+w+'in '+h+'in; margin: 0.35in; }';
+}
+document.getElementById('sel-size').addEventListener('change', applyPageSetup);
+document.getElementById('sel-orient').addEventListener('change', applyPageSetup);
+applyPageSetup();
+
+document.getElementById('in-title').addEventListener('input', (e)=>{
+  document.getElementById('ph-title').textContent = e.target.value;
+});
+
+const legendMeta = {
+  township:{label:'Township lines', dash:'solid'},
+  place:{label:'City / village limits', dash:'dashed'},
+  school:{label:'School districts', dash:'dotted'},
+  tract:{label:'Census tracts', dash:'thin'},
+  hsd211:{label:'HSD 211 boundary', dash:'thick'},
+  hsbounds:{label:'HS attendance boundaries + schools/office', dash:'solid'},
+  d54bounds:{label:'D54 school boundaries + points', dash:'solid'},
+  precincts:{label:'Voting precincts', dash:'dashed'},
+  county:{label:'Counties', dash:'solid'},
+  highways:{label:'Major highways/expressways', dash:'solid'}
+};
+
+function buildPrintLegend(){
+  const el = document.getElementById('printLegend');
+  const items = [];
+  Object.keys(legendMeta).forEach(key=>{
+    if (document.getElementById(layerDefs[key].chk).checked) items.push(legendMeta[key].label);
+  });
+  el.textContent = items.length ? ('Shown: ' + items.join('  ·  ')) : 'Blank base map — roads only';
+}
+
+window.addEventListener('beforeprint', ()=>{
+  buildPrintLegend();
+  map.invalidateSize();
+});
+window.addEventListener('afterprint', ()=>{ map.invalidateSize(); });
+
+document.getElementById('btn-print').addEventListener('click', ()=>window.print());
+document.getElementById('btn-blank').addEventListener('click', ()=>{
+  Object.keys(layerDefs).forEach(key=>{
+    document.getElementById(layerDefs[key].chk).checked = false;
+    if (active[key]) map.removeLayer(active[key]);
+  });
+  if (hsd211SitesLayer) map.removeLayer(hsd211SitesLayer);
+  if (d54SitesLayer) map.removeLayer(d54SitesLayer);
+  if (pollingPlacesLayer) map.removeLayer(pollingPlacesLayer);
+});
+
+// Reveal each civics note only once its linked layer checkbox is turned on
+// (data-for lists one or more checkbox ids, space-separated) — nothing shows
+// until a student actually selects that layer, and un-checking hides it again.
+function refreshCivicsNotes(){
+  document.querySelectorAll('.note[data-for]').forEach(note=>{
+    const ids = note.dataset.for.split(' ');
+    const shown = ids.some(id=>{ const el = document.getElementById(id); return el && el.checked; });
+    note.classList.toggle('shown', shown);
+  });
+}
+document.getElementById('sidebar').addEventListener('change', (e)=>{
+  if (e.target.type === 'checkbox') refreshCivicsNotes();
+});
+document.getElementById('btn-blank').addEventListener('click', refreshCivicsNotes);
+refreshCivicsNotes();
+
+// Deferred until here since it depends on layerDefs / getHsd211Boundary,
+// both defined later in the script than the base-map setup above.
+applyLabelsForMode();
+</script>
+</body>
+</html>
