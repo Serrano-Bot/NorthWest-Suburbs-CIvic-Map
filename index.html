@@ -163,48 +163,6 @@
       <div class="opacity-row"><span>Fill</span><input type="range" id="op-county" min="0" max="0.9" step="0.05" value="0.3"><span id="opval-county">30%</span></div>
 
       <label class="layer-row">
-        <input type="checkbox" id="chk-commissioner">
-        <span class="swatch" id="sw-commissioner" style="border-top-color:#000; border-top-width:2px;"></span>
-        County Commissioner districts
-      </label>
-      <div class="opacity-row"><span>Fill</span><input type="range" id="op-commissioner" min="0" max="0.9" step="0.05" value="0.3"><span id="opval-commissioner">30%</span></div>
-
-      <label class="layer-row">
-        <input type="checkbox" id="chk-boardreview">
-        <span class="swatch" id="sw-boardreview" style="border-top-color:#000; border-top-width:2px; border-top-style:dashed;"></span>
-        Board of Review districts
-      </label>
-      <div class="opacity-row"><span>Fill</span><input type="range" id="op-boardreview" min="0" max="0.9" step="0.05" value="0.3"><span id="opval-boardreview">30%</span></div>
-
-      <label class="layer-row">
-        <input type="checkbox" id="chk-judicial">
-        <span class="swatch" id="sw-judicial" style="border-top-color:#000; border-top-width:2px; border-top-style:dotted;"></span>
-        Judicial subcircuit
-      </label>
-      <div class="opacity-row"><span>Fill</span><input type="range" id="op-judicial" min="0" max="0.9" step="0.05" value="0.3"><span id="opval-judicial">30%</span></div>
-
-      <label class="layer-row">
-        <input type="checkbox" id="chk-congress">
-        <span class="swatch" id="sw-congress" style="border-top-color:#000; border-top-width:3px;"></span>
-        U.S. Congressional district
-      </label>
-      <div class="opacity-row"><span>Fill</span><input type="range" id="op-congress" min="0" max="0.9" step="0.05" value="0.3"><span id="opval-congress">30%</span></div>
-
-      <label class="layer-row">
-        <input type="checkbox" id="chk-statesenate">
-        <span class="swatch" id="sw-statesenate" style="border-top-color:#000; border-top-width:2px;"></span>
-        State Senate district
-      </label>
-      <div class="opacity-row"><span>Fill</span><input type="range" id="op-statesenate" min="0" max="0.9" step="0.05" value="0.3"><span id="opval-statesenate">30%</span></div>
-
-      <label class="layer-row">
-        <input type="checkbox" id="chk-statehouse">
-        <span class="swatch" id="sw-statehouse" style="border-top-color:#000; border-top-width:1px;"></span>
-        State House district
-      </label>
-      <div class="opacity-row"><span>Fill</span><input type="range" id="op-statehouse" min="0" max="0.9" step="0.05" value="0.3"><span id="opval-statehouse">30%</span></div>
-
-      <label class="layer-row">
         <input type="checkbox" id="chk-township">
         <span class="swatch" id="sw-township" style="border-top-color:#000;"></span>
         Township lines
@@ -361,49 +319,6 @@
       <em>For example:</em> issuing marriage licenses, running the county
       jail, mailing your property tax bill, and operating public health
       clinics that give vaccines.
-    </div>
-    <div class="note" data-for="chk-commissioner">
-      <strong>County Commissioner district:</strong> the district that elects
-      one of the 17 members of the Cook County Board of Commissioners, the
-      county's actual legislature — it passes the county budget and county
-      ordinances. Redrawn once a decade after each census. <em>For
-      example:</em> voting on a county gas or tobacco tax, passing a county
-      minimum-wage ordinance, and deciding funding for the county forest
-      preserves.
-    </div>
-    <div class="note" data-for="chk-boardreview">
-      <strong>Board of Review district:</strong> elects one of three
-      commissioners who hear property-tax assessment appeals countywide — a
-      narrow, specific job distinct from the County Board. Redrawn each
-      decade like other county districts. <em>For example:</em> lowering a
-      homeowner's assessed value after an appeal, ruling on a commercial
-      property's tax dispute, and granting a senior citizen's tax exemption.
-    </div>
-    <div class="note" data-for="chk-judicial">
-      <strong>Judicial subcircuit:</strong> elects judges to the Cook County
-      Circuit Court for that specific area, rather than countywide — created
-      in the 1990s so judges could be elected by nearby voters instead of
-      county-wide slating. Redrawn periodically by the state legislature.
-      <em>For example:</em> a judge in this subcircuit might preside over a
-      local divorce/custody case, a landlord-tenant dispute, a traffic case,
-      or a criminal trial for something that happened nearby.
-    </div>
-    <div class="note" data-for="chk-congress">
-      <strong>U.S. Congressional district:</strong> elects one member to the
-      U.S. House of Representatives. Redrawn every 10 years by the Illinois
-      legislature after each census — historically one of the more
-      contentious redistricting fights in the state. <em>For example:</em>
-      voting on federal spending bills, voting to authorize military action,
-      and voting on national policy like Social Security or immigration law.
-    </div>
-    <div class="note" data-for="chk-statesenate chk-statehouse">
-      <strong>State Senate / State House district:</strong> elects members of
-      the Illinois General Assembly — the state's actual lawmaking body,
-      which passes state law, the state budget, and sets policy for schools,
-      Medicaid, and more. Also redrawn every 10 years post-census. <em>For
-      example:</em> setting the state minimum wage, funding public schools
-      statewide, passing state gun laws, and legalizing (or banning)
-      something like recreational marijuana.
     </div>
     <div class="note" style="color:var(--mute); font-size:.68rem;">
       Not included: Community College, Fire Protection, Public Library, Park,
@@ -595,39 +510,6 @@ const layerDefs = {
     // Cook's actual neighbors all load in full regardless of this box's size.
     url: tigerUrl('State_County', 11, '-88.65,41.35,-87.20,42.50'),
     dash:null, weight:2.5, nameField:'BASENAME', chk:'chk-county', op:'op-county'
-  },
-  congress: {
-    url: tigerUrl('Legislative', 0, bx),
-    dash:null, weight:2, nameField:'BASENAME', chk:'chk-congress', op:'op-congress', filterToTownship:true
-  },
-  statesenate: {
-    url: tigerUrl('Legislative', 1, bx),
-    dash:null, weight:2, nameField:'BASENAME', chk:'chk-statesenate', op:'op-statesenate', filterToTownship:true
-  },
-  statehouse: {
-    url: tigerUrl('Legislative', 2, bx),
-    dash:null, weight:2, nameField:'BASENAME', chk:'chk-statehouse', op:'op-statehouse', filterToTownship:true
-  },
-  commissioner: {
-    // Cook County's own public GIS service (built for external consumption,
-    // unlike the internal server that failed all session) — covers three
-    // Cook-specific district types no standard Census geography has.
-    url: 'https://gis.cookcountyil.gov/traditional/rest/services/politicalBoundary/MapServer/1/query?where=1%3D1&geometry='+
-         encodeURIComponent(bx)+'&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects'+
-         '&outFields=*&outSR=4326&f=geojson',
-    dash:null, weight:2, nameField:'DISTRICT', chk:'chk-commissioner', op:'op-commissioner', filterToTownship:true
-  },
-  boardreview: {
-    url: 'https://gis.cookcountyil.gov/traditional/rest/services/politicalBoundary/MapServer/4/query?where=1%3D1&geometry='+
-         encodeURIComponent(bx)+'&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects'+
-         '&outFields=*&outSR=4326&f=geojson',
-    dash:null, weight:2, nameField:'DISTRICT', chk:'chk-boardreview', op:'op-boardreview', filterToTownship:true
-  },
-  judicial: {
-    url: 'https://gis.cookcountyil.gov/traditional/rest/services/politicalBoundary/MapServer/5/query?where=1%3D1&geometry='+
-         encodeURIComponent(bx)+'&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects'+
-         '&outFields=*&outSR=4326&f=geojson',
-    dash:null, weight:2, nameField:'DISTRICT', chk:'chk-judicial', op:'op-judicial', filterToTownship:true
   },
   highways: {
     // TIGERweb's "Primary Roads" layer = interstates and other limited-access
@@ -961,12 +843,6 @@ const legendMeta = {
   d54bounds:{label:'D54 school boundaries + points', dash:'solid'},
   precincts:{label:'Voting precincts', dash:'dashed'},
   county:{label:'Counties', dash:'solid'},
-  commissioner:{label:'County Commissioner districts', dash:'solid'},
-  boardreview:{label:'Board of Review districts', dash:'dashed'},
-  judicial:{label:'Judicial subcircuit', dash:'dotted'},
-  congress:{label:'U.S. Congressional district', dash:'thick'},
-  statesenate:{label:'State Senate district', dash:'solid'},
-  statehouse:{label:'State House district', dash:'thin'},
   highways:{label:'Major highways/expressways', dash:'solid'}
 };
 
